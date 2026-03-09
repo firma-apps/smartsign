@@ -37,10 +37,10 @@ exports.sendVerifyCode = functions.https.onRequest((req, res) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      await sendEmail(email, "Din PilotSign verifikationskode", `
+      await sendEmail(email, "Din SmartSign verifikationskode", `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;">
           <div style="text-align:center;margin-bottom:20px;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">PilotSign</div>
+            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">SmartSign</div>
           </div>
           <p style="color:#444;font-size:14px;">Hej ${signerName || ""},</p>
           <p style="color:#444;font-size:14px;">Du er ved at signere <strong>${docTitle || "et dokument"}</strong>. Brug koden herunder:</p>
@@ -48,7 +48,7 @@ exports.sendVerifyCode = functions.https.onRequest((req, res) => {
             <div style="display:inline-block;background:#f5f5f5;padding:16px 32px;border-radius:12px;font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:8px;color:#1a1a1a;">${code}</div>
           </div>
           <p style="color:#999;font-size:12px;text-align:center;">Koden udloeber om 5 minutter.</p>
-          <p style="color:#bbb;font-size:11px;text-align:center;margin-top:24px;">PilotSign — Pakkepiloten</p>
+          <p style="color:#bbb;font-size:11px;text-align:center;margin-top:24px;">SmartSign — SmartSign</p>
         </div>
       `);
 
@@ -113,7 +113,7 @@ exports.sendSigningEmail = functions.https.onRequest((req, res) => {
       await sendEmail(to, "Underskriv venligst: " + docTitle, `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">PilotSign</div>
+            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">SmartSign</div>
           </div>
           <h2 style="color:#1a1a1a;font-size:20px;">Hej ${signerName || ""},</h2>
           <p style="color:#444;font-size:14px;line-height:1.6;">Du har modtaget et dokument til digital signering:</p>
@@ -125,7 +125,7 @@ exports.sendSigningEmail = functions.https.onRequest((req, res) => {
           <div style="text-align:center;margin:24px 0;">
             <a href="${signingUrl}" style="display:inline-block;background:#3b7dff;color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:bold;font-size:15px;">Underskriv dokument</a>
           </div>
-          <p style="color:#999;font-size:11px;text-align:center;margin-top:24px;">PilotSign — Pakkepiloten</p>
+          <p style="color:#999;font-size:11px;text-align:center;margin-top:24px;">SmartSign — SmartSign</p>
         </div>
       `);
 
@@ -150,7 +150,7 @@ exports.sendReminder = functions.https.onRequest((req, res) => {
       await sendEmail(to, "Paamindelse: Underskriv venligst — " + docTitle, `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">PilotSign</div>
+            <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">SmartSign</div>
           </div>
           <h2 style="color:#1a1a1a;font-size:20px;">Paamindelse</h2>
           <p style="color:#444;font-size:14px;">Hej ${signerName || ""}, du har stadig et ventende dokument:</p>
@@ -161,7 +161,7 @@ exports.sendReminder = functions.https.onRequest((req, res) => {
           <div style="text-align:center;margin:24px 0;">
             <a href="${signingUrl}" style="display:inline-block;background:#ff9800;color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:bold;">Underskriv nu</a>
           </div>
-          <p style="color:#999;font-size:11px;text-align:center;">PilotSign — Pakkepiloten</p>
+          <p style="color:#999;font-size:11px;text-align:center;">SmartSign — SmartSign</p>
         </div>
       `);
 
@@ -187,7 +187,7 @@ exports.sendCompletionNotice = functions.https.onRequest((req, res) => {
         await sendEmail(r.email, "Dokument fuldfoert: " + docTitle, `
           <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
             <div style="text-align:center;margin-bottom:24px;">
-              <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">PilotSign</div>
+              <div style="display:inline-block;background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:white;padding:8px 16px;border-radius:8px;font-weight:bold;font-size:18px;">SmartSign</div>
             </div>
             <div style="text-align:center;margin:20px 0;">
               <div style="font-size:48px;">✅</div>
@@ -198,7 +198,7 @@ exports.sendCompletionNotice = functions.https.onRequest((req, res) => {
               <div style="font-size:16px;font-weight:bold;">${docTitle}</div>
               <div style="font-size:13px;color:#666;margin-top:4px;">Alle ${recipients.length} underskrivere har signeret</div>
             </div>
-            <p style="color:#999;font-size:11px;text-align:center;">PilotSign — Pakkepiloten</p>
+            <p style="color:#999;font-size:11px;text-align:center;">SmartSign — SmartSign</p>
           </div>
         `);
       }
