@@ -86,6 +86,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:#2e6fee;transform:translateY(-1px)}.btn-p:disabled{opacity:.35;cursor:not-allowed;transform:none}
 .btn-g{background:none;color:var(--dim);border:1px solid var(--border)}.btn-g:hover{background:var(--hover);color:var(--text)}
 .btn-s{background:var(--green);color:#fff}.btn-s:hover{background:#26b96a}
+.btn-r{background:var(--red);color:#fff}.btn-r:hover{background:#c0392b}
 .btn-sm{padding:6px 14px;font-size:12px}
 .btn-row{display:flex;align-items:center;justify-content:space-between;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
 
@@ -311,6 +312,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- MODALS -->
 <div class="modal-bg" id="signModal"><div class="modal" id="signFlow"></div></div>
 <div class="modal-bg" id="detailModal"><div class="modal" id="detailContent"></div></div>
+<div class="modal-bg" id="editModal"><div class="modal" id="editContent" style="max-width:540px;width:100%;max-height:90vh;overflow-y:auto;"></div></div>
 <div class="loading-overlay hidden" id="loadingOverlay"><div class="spinner" style="width:28px;height:28px;border-width:3px"></div><span>Behandler...</span></div>
 
 <script>
@@ -596,7 +598,7 @@ q("createBtn").addEventListener("click", async function(){
 function openDetail(id){
   var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
   var st = getDocStatus(d);
-  var h = '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px"><div><div style="font-size:20px;font-weight:700">' + esc(d.title) + '</div><div style="font-size:12px;color:var(--dim);margin-top:4px">Oprettet ' + fmtDate(d.created) + (d.deadline ? " · Frist: " + fmtDate(d.deadline) : "") + '</div></div><button class="btn btn-g btn-sm" data-close>✕</button></div>';
+  var h = '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px"><div><div style="font-size:20px;font-weight:700">' + esc(d.title) + '</div><div style="font-size:12px;color:var(--dim);margin-top:4px">Oprettet ' + fmtDate(d.created) + (d.deadline ? " · Frist: " + fmtDate(d.deadline) : "") + '</div></div><div style="display:flex;gap:8px;align-items:center"><button class="btn btn-p btn-sm" data-editdoc title="Rediger">✏️</button><button class="btn btn-r btn-sm" data-deletedoc title="Slet">🗑</button><button class="btn btn-g btn-sm" data-close>✕</button></div></div>';
   h += '<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:10px">Underskrivere</div>';
   d.signers.forEach(function(s, i){
     var badge = s.status === "signed" ? '<span class="status s-done">✓ Signeret</span>' : '<span class="status s-wait">Afventer</span>';
@@ -615,6 +617,13 @@ function openDetail(id){
     var remBtn = e.target.closest("[data-remind]");
     if(remBtn){ sendReminder(id, parseInt(remBtn.dataset.remind)); return; }
     if(e.target.closest("[data-dldoc]")) downloadDoc(id);
+    if(e.target.closest("[data-editdoc]")){ q("detailModal").classList.remove("on"); openEditModal(id); return; }
+    if(e.target.closest("[data-deletedoc]")){
+      if(confirm("Er du sikker på at du vil slette \"" + d.title + "\"? Dette kan ikke fortrydes.")){ 
+        deleteDoc(id); 
+      }
+      return;
+    }
   };
 }
 q("detailModal").addEventListener("click", function(e){ if(e.target === this) this.classList.remove("on"); });
@@ -797,6 +806,145 @@ async function completeSigning(){
 // ══════════════════════════════════════
 // DOWNLOAD
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+// EDIT MODAL
+// ══════════════════════════════════════
+function openEditModal(id){
+  var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
+  var editSigners = d.signers.map(function(s){ return { name:s.name, email:s.email, status:s.status }; });
+
+  function renderEditModal(){
+    var signersHtml = editSigners.map(function(s, i){
+      return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;" id="esRow'+i+'">'
+        + '<input class="inp" style="flex:1" value="'+esc(s.name)+'" id="esName'+i+'" placeholder="Navn">'
+        + '<input class="inp" style="flex:1.5" value="'+esc(s.email)+'" id="esEmail'+i+'" placeholder="E-mail" '+(s.status==="signed"?"disabled title='Allerede underskrevet'":"")+' >'
+        + (s.status==="signed" ? '<span style="color:var(--green);font-size:11px;white-space:nowrap;">✓ Signeret</span>' : '<button class="btn btn-r btn-sm" onclick="editRemoveSigner('+i+')">✕</button>')
+        + '</div>';
+    }).join("");
+
+    q("editContent").innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">'
+      + '<div style="font-size:18px;font-weight:700;">Rediger signering</div>'
+      + '<button class="btn btn-g btn-sm" onclick="closeEditModal()">✕</button></div>'
+      + '<div class="fg"><label class="lbl">Titel</label><input class="inp" id="editTitle" value="'+esc(d.title)+'"></div>'
+      + '<div class="fg"><label class="lbl">Frist</label><input class="inp" type="date" id="editDeadline" value="'+(d.deadline||"")+'"></div>'
+      + '<div class="fg"><label class="lbl">Dokument (valgfrit — erstat fil)</label>'
+      + '<div class="upzone" id="editUpZone" style="padding:12px;"><div class="upzone-icon" style="font-size:20px;">📎</div><div class="upzone-text" style="font-size:12px;">Klik for at vælge ny fil</div></div>'
+      + '<input type="file" id="editUpFile" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg" style="display:none">'
+      + '<div id="editFilePreview" style="margin-top:6px;font-size:12px;color:var(--dim);">Nuværende: '+esc(d.fileName||"")+'</div></div>'
+      + '<div class="fg"><label class="lbl">Underskrivere</label>' + signersHtml + '</div>'
+      + '<button class="btn btn-g btn-sm" style="margin-bottom:16px;" onclick="editAddSigner()">+ Tilføj underskriver</button>'
+      + '<div class="btn-row"><button class="btn btn-g" onclick="closeEditModal()">Annuller</button><button class="btn btn-s" onclick="saveEdit(\''+id+'\')">💾 Gem ændringer</button></div>';
+
+    q("editUpZone").addEventListener("click", function(){ q("editUpFile").click(); });
+    q("editUpFile").addEventListener("change", function(){
+      if(this.files.length){
+        q("editFilePreview").textContent = "Ny fil valgt: " + this.files[0].name;
+      }
+    });
+    q("editModal").classList.add("on");
+  }
+
+  window.editRemoveSigner = function(i){
+    if(editSigners[i].status === "signed"){ alert("Kan ikke fjerne en underskriver der allerede har signeret."); return; }
+    editSigners.splice(i, 1); renderEditModal();
+  };
+
+  window.editAddSigner = function(){
+    editSigners.push({ name:"", email:"", status:"pending" }); renderEditModal();
+    // Focus new name field
+    setTimeout(function(){ var inp = q("esName"+(editSigners.length-1)); if(inp) inp.focus(); }, 50);
+  };
+
+  window.saveEdit = async function(docId){
+    var newTitle = q("editTitle").value.trim();
+    var newDeadline = q("editDeadline").value || null;
+    if(!newTitle){ alert("Titel må ikke være tom."); return; }
+
+    // Collect updated signers
+    var updatedSigners = d.signers.map(function(s, i){
+      var nameEl = q("esName"+i), emailEl = q("esEmail"+i);
+      return Object.assign({}, s, {
+        name: nameEl ? nameEl.value.trim() : s.name,
+        email: emailEl && !emailEl.disabled ? emailEl.value.trim() : s.email
+      });
+    });
+
+    // Add new signers (beyond original count)
+    for(var i = d.signers.length; i < editSigners.length; i++){
+      var nameEl = q("esName"+i), emailEl = q("esEmail"+i);
+      if(nameEl && emailEl && nameEl.value.trim() && emailEl.value.trim()){
+        updatedSigners.push({ name:nameEl.value.trim(), email:emailEl.value.trim(), status:"pending", signedAt:null, cprEncrypted:"", sigHash:"", sigImg:"" });
+      }
+    }
+
+    // Remove deleted signers (editSigners is shorter)
+    if(editSigners.length < d.signers.length){
+      updatedSigners = updatedSigners.filter(function(s, i){ return i < editSigners.length; });
+    }
+
+    showLoading();
+    try {
+      var updateData = { title:newTitle, deadline:newDeadline, signers:updatedSigners };
+
+      // Handle new file if selected
+      var fileInput = q("editUpFile");
+      if(fileInput.files.length){
+        var f = fileInput.files[0];
+        var fileData = await new Promise(function(res, rej){
+          var r = new FileReader(); r.onload=function(e){ res(e.target.result); }; r.onerror=rej; r.readAsDataURL(f);
+        });
+        updateData.fileName = f.name;
+        updateData.fileData = fileData;
+      }
+
+      await db.collection("signings").doc(docId).update(updateData);
+      await db.collection("signings").doc(docId).collection("audit").add({ time:new Date().toISOString(), type:"info", text:"Signering redigeret af "+auth.currentUser.email });
+
+      // Send invitation to new signers
+      var baseUrl = window.location.origin + window.location.pathname;
+      for(var j = d.signers.length; j < updatedSigners.length; j++){
+        var ns = updatedSigners[j];
+        try {
+          await cfPost("sendSigningEmail", { to:ns.email, signerName:ns.name, docTitle:newTitle, signingUrl:baseUrl+"?sign="+docId+"&idx="+j, deadline:newDeadline?fmtDate(newDeadline):null });
+        } catch(e){ console.error("Email fejl:", e); }
+      }
+
+      hideLoading();
+      closeEditModal();
+      await loadSignings();
+      openDetail(docId);
+    } catch(err){
+      hideLoading();
+      alert("Fejl: " + err.message);
+    }
+  };
+
+  window.closeEditModal = function(){ q("editModal").classList.remove("on"); };
+  q("editModal").onclick = function(e){ if(e.target===this) closeEditModal(); };
+
+  renderEditModal();
+}
+
+async function deleteDoc(id){
+  showLoading();
+  try {
+    // Slet audit subcollection først
+    var auditSnap = await db.collection("signings").doc(id).collection("audit").get();
+    var batch = db.batch();
+    auditSnap.forEach(function(doc){ batch.delete(doc.ref); });
+    await batch.commit();
+    // Slet selve dokumentet
+    await db.collection("signings").doc(id).delete();
+    hideLoading();
+    q("detailModal").classList.remove("on");
+    await loadSignings();
+  } catch(err){
+    hideLoading();
+    alert("Kunne ikke slette: " + err.message);
+  }
+}
+
 function downloadDoc(id){
   var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
   var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(d.title) + '</title><style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#1a1a1a}h1{font-size:22px;border-bottom:2px solid #333;padding-bottom:10px}.meta{background:#f5f5f5;padding:16px;border-radius:8px;margin:20px 0}.meta div{padding:4px 0;font-size:13px}.meta .lbl{color:#666;display:inline-block;width:120px}.sig-block{border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}.sig-block img{max-width:300px;height:auto}.sig-meta{font-size:11px;color:#666;margin-top:8px;word-break:break-all}.stamp{text-align:center;margin-top:40px;padding:20px;border:2px solid #2ed47a;border-radius:8px;background:#f0faf4}.stamp-title{font-size:16px;font-weight:bold;color:#2ed47a}</style></head><body>';
@@ -836,156 +984,14 @@ async function renderAuditPage(){
 }
 
 // ══════════════════════════════════════
-// PUBLIC SIGNING FLOW (ingen login krævet)
+// CHECK URL FOR SIGNING LINK
 // ══════════════════════════════════════
 (function checkSigningLink(){
   var params = new URLSearchParams(window.location.search);
-  if(!params.has("sign")) return;
-
-  var pubDocId = params.get("sign");
-  var pubIdx = parseInt(params.get("idx")) || 0;
-  var pubDoc = null;
-  var pubState = { step:1, _cpr:"", sigImg:"", sigHash:"" };
-
-  // Skjul login og app, vis public signing screen
-  document.addEventListener("DOMContentLoaded", function(){});
-  q("loginScreen").classList.add("hidden");
-  q("appScreen").classList.add("hidden");
-
-  // Opret public signing container
-  var wrap = document.createElement("div");
-  wrap.id = "pubSignWrap";
-  wrap.style.cssText = "min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;";
-  wrap.innerHTML = '<div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:32px;" id="pubSignBox"><div style="text-align:center;margin-bottom:24px;font-size:22px;font-weight:700;">Indlæser dokument...</div></div>';
-  document.body.appendChild(wrap);
-
-  function pubRender(html){
-    q("pubSignBox").innerHTML = '<div style="text-align:center;margin-bottom:20px;"><span style="background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:#fff;padding:6px 14px;border-radius:8px;font-weight:700;font-size:16px;">SmartSign</span></div>' + html;
+  if(params.has("sign")){
+    // TODO: Load signing doc by ID and open sign flow for external signers
+    console.log("Signing link detected:", params.get("sign"), "idx:", params.get("idx"));
   }
-
-  function pubStep1(){
-    var s = pubDoc.signers[pubIdx];
-    pubRender(
-      '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Bekræft identitet</div>'
-      + '<div style="font-size:13px;color:var(--dim);margin-bottom:24px;">' + esc(s.name) + ' — ' + esc(pubDoc.title) + '</div>'
-      + '<div class="fg"><label class="lbl">CPR-nummer</label><div class="cpr-wrap"><input id="pc1" maxlength="6" placeholder="DDMMÅÅ"><span class="cpr-dash">—</span><input id="pc2" maxlength="4" placeholder="XXXX"></div></div>'
-      + '<div class="btn-row"><button class="btn btn-p" id="pcBtn" disabled onclick="pubGoVerify()">Send e-mail-kode →</button></div>'
-    );
-    var s1 = q("pc1"), s2 = q("pc2");
-    function chk(){ q("pcBtn").disabled = !(s1.value.length===6 && s2.value.length===4); }
-    s1.addEventListener("input", function(){ this.value=this.value.replace(/\D/g,""); if(this.value.length>=6) s2.focus(); chk(); });
-    s2.addEventListener("input", function(){ this.value=this.value.replace(/\D/g,""); chk(); });
-  }
-
-  window.pubGoVerify = async function(){
-    var s = pubDoc.signers[pubIdx];
-    pubState._cpr = q("pc1").value + "-" + q("pc2").value;
-    pubRender('<div style="text-align:center;padding:32px;color:var(--dim);">Sender kode...</div>');
-    try {
-      await cfPost("sendVerifyCode", { email:s.email, signerName:s.name, signingId:pubDocId, signerIdx:pubIdx, docTitle:pubDoc.title });
-      pubStep2();
-    } catch(e){ pubRender('<div style="color:var(--red);text-align:center;">Fejl: ' + e.message + '</div>'); }
-  };
-
-  function pubStep2(){
-    var s = pubDoc.signers[pubIdx];
-    var masked = s.email.replace(/^(.{2})(.*)(@.*)$/, function(m,a,b,c){ return a+b.replace(/./g,"•")+c; });
-    pubRender(
-      '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">E-mail-verifikation</div>'
-      + '<div style="text-align:center;padding:12px;background:var(--accent-glow);border-radius:var(--r);margin-bottom:16px;">Kode sendt til <span style="font-family:monospace;color:var(--accent);font-weight:600;">' + esc(masked) + '</span></div>'
-      + '<div class="sms-wrap">' + [0,1,2,3,4,5].map(function(j){ return '<input class="sms-d pub-d" maxlength="1" data-i="'+j+'" inputmode="numeric">'; }).join("") + '</div>'
-      + '<div id="pubSmsErr" style="text-align:center;color:var(--red);font-size:12px;display:none;">Forkert kode</div>'
-      + '<div style="text-align:center;font-size:12px;color:var(--dim);margin-bottom:8px;">Tjek din indbakke (og spam-mappe)</div>'
-      + '<div class="btn-row"><button class="btn btn-g" onclick="pubStep1Back()">← Tilbage</button><button class="btn btn-p" id="pubSmsBtn" disabled onclick="pubVerify()">Bekræft →</button></div>'
-    );
-    var digits = document.querySelectorAll(".pub-d");
-    digits.forEach(function(d){
-      d.addEventListener("input", function(){
-        this.value = this.value.replace(/\D/g,"").slice(0,1);
-        var i = parseInt(this.dataset.i); if(this.value && i<5) digits[i+1].focus();
-        var code=""; digits.forEach(function(x){ code+=x.value; }); q("pubSmsBtn").disabled = code.length<6;
-      });
-      d.addEventListener("keydown", function(e){ if(e.key==="Backspace"&&!this.value){ var i=parseInt(this.dataset.i); if(i>0) digits[i-1].focus(); } });
-    });
-    if(digits[0]) setTimeout(function(){ digits[0].focus(); }, 100);
-  }
-
-  window.pubStep1Back = function(){ pubStep1(); };
-
-  window.pubVerify = async function(){
-    var code=""; document.querySelectorAll(".pub-d").forEach(function(x){ code+=x.value; });
-    try {
-      var result = await cfPost("verifyCode", { code:code, signingId:pubDocId, signerIdx:pubIdx });
-      if(result.verified){ pubStep3(); }
-      else { q("pubSmsErr").style.display="block"; q("pubSmsErr").textContent=result.error||"Forkert kode"; }
-    } catch(e){ q("pubSmsErr").style.display="block"; q("pubSmsErr").textContent="Verifikation fejlede"; }
-  };
-
-  function pubStep3(){
-    pubRender(
-      '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Tegn underskrift</div>'
-      + '<div class="sig-box"><canvas id="pubCanvas" height="180"></canvas><button class="sig-clear" onclick="pubClearSig()">Ryd</button></div>'
-      + '<div class="sig-hash" id="pubSigHash">Tegn din underskrift ovenfor...</div>'
-      + '<div class="btn-row"><button class="btn btn-g" onclick="pubStep2Back()">← Tilbage</button><button class="btn btn-s" id="pubSigBtn" disabled onclick="pubComplete()">✓ Underskriv</button></div>'
-    );
-    setTimeout(pubInitPad, 50);
-  }
-
-  window.pubStep2Back = function(){ pubStep2(); };
-
-  var pCanvas, pCtx, pDraw=false, pHas=false;
-  function pubInitPad(){
-    pCanvas = q("pubCanvas"); if(!pCanvas) return;
-    pCtx = pCanvas.getContext("2d"); pCanvas.width = pCanvas.offsetWidth; pCanvas.height=180;
-    pCtx.strokeStyle="#e4e7f0"; pCtx.lineWidth=2.5; pCtx.lineCap="round"; pCtx.lineJoin="round";
-    function gp(e){ var r=pCanvas.getBoundingClientRect(); var t=e.touches?e.touches[0]:e; return {x:(t.clientX-r.left)*(pCanvas.width/r.width),y:(t.clientY-r.top)*(pCanvas.height/r.height)}; }
-    pCanvas.onmousedown=function(e){ e.preventDefault(); pDraw=true; var p=gp(e); pCtx.beginPath(); pCtx.moveTo(p.x,p.y); };
-    pCanvas.onmousemove=function(e){ if(!pDraw) return; e.preventDefault(); var p=gp(e); pCtx.lineTo(p.x,p.y); pCtx.stroke(); pHas=true; };
-    pCanvas.onmouseup=pCanvas.onmouseleave=function(){ if(!pDraw) return; pDraw=false; if(pHas) pubGenHash(); };
-    pCanvas.ontouchstart=function(e){ e.preventDefault(); pDraw=true; var p=gp(e); pCtx.beginPath(); pCtx.moveTo(p.x,p.y); };
-    pCanvas.ontouchmove=function(e){ if(!pDraw) return; e.preventDefault(); var p=gp(e); pCtx.lineTo(p.x,p.y); pCtx.stroke(); pHas=true; };
-    pCanvas.ontouchend=function(){ if(!pDraw) return; pDraw=false; if(pHas) pubGenHash(); };
-  }
-  window.pubClearSig=function(){ pCtx.clearRect(0,0,pCanvas.width,pCanvas.height); pHas=false; q("pubSigBtn").disabled=true; q("pubSigHash").textContent="Tegn din underskrift ovenfor..."; };
-  function pubGenHash(){
-    var img=pCanvas.toDataURL("image/png");
-    var s=pubDoc.signers[pubIdx];
-    var hash=mkHash(img+"|"+pubState._cpr+"|"+s.name+"|"+Date.now()+"|"+pubDocId);
-    q("pubSigHash").innerHTML="🔒 <strong>Hash:</strong> "+hash.slice(0,32)+"...";
-    q("pubSigBtn").disabled=false;
-    pubState.sigImg=img; pubState.sigHash=hash;
-  }
-
-  window.pubComplete = async function(){
-    pubRender('<div style="text-align:center;padding:32px;color:var(--dim);">Gemmer underskrift...</div>');
-    try {
-      var s = pubDoc.signers[pubIdx];
-      var encCpr = encryptCpr(pubState._cpr, pubDoc.docKey||"default-key");
-      s.status="signed"; s.signedAt=new Date().toISOString(); s.sigHash=pubState.sigHash; s.sigImg=pubState.sigImg; s.cprEncrypted=encCpr;
-      await db.collection("signings").doc(pubDocId).update({ signers: pubDoc.signers });
-      await db.collection("signings").doc(pubDocId).collection("audit").add({ time:new Date().toISOString(), type:"ok", text:s.name+": Dokument signeret via offentligt link" });
-      var allDone = pubDoc.signers.every(function(x){ return x.status==="signed"; });
-      if(allDone){
-        try { await cfPost("sendCompletionNotice", { recipients:pubDoc.signers, docTitle:pubDoc.title, signingId:pubDocId }); } catch(e){}
-        await db.collection("signings").doc(pubDocId).update({ status:"completed" });
-      }
-      pubRender('<div style="text-align:center;padding:32px;"><div style="font-size:48px;">✅</div><h2 style="color:var(--green);margin:16px 0 8px;">Dokument underskrevet!</h2><p style="color:var(--dim);">Tak, ' + esc(s.name) + '. Din underskrift er registreret.</p></div>');
-    } catch(err){
-      pubRender('<div style="color:var(--red);text-align:center;padding:32px;">Fejl: ' + err.message + '</div>');
-    }
-  };
-
-  // Load dokument fra Firestore
-  db.collection("signings").doc(pubDocId).get().then(function(doc){
-    if(!doc.exists){ pubRender('<div style="color:var(--red);text-align:center;">Dokument ikke fundet.</div>'); return; }
-    pubDoc = doc.data(); pubDoc.id = doc.id;
-    var s = pubDoc.signers[pubIdx];
-    if(!s){ pubRender('<div style="color:var(--red);text-align:center;">Ugyldig underskriver.</div>'); return; }
-    if(s.status === "signed"){ pubRender('<div style="text-align:center;padding:32px;"><div style="font-size:48px;">✅</div><h2 style="color:var(--green);">Allerede underskrevet</h2><p style="color:var(--dim);">Du har allerede underskrevet dette dokument.</p></div>'); return; }
-    pubStep1();
-  }).catch(function(err){
-    pubRender('<div style="color:var(--red);text-align:center;">Fejl: ' + err.message + '</div>');
-  });
 })();
 
 })();
