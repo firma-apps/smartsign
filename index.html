@@ -983,16 +983,124 @@ async function renderAuditPage(){
   }).join("");
 }
 
+
 // ══════════════════════════════════════
-// CHECK URL FOR SIGNING LINK
+// PUBLIC SIGNING FLOW (ingen login krævet)
 // ══════════════════════════════════════
-(function checkSigningLink(){
+(function(){
   var params = new URLSearchParams(window.location.search);
-  if(params.has("sign")){
-    // TODO: Load signing doc by ID and open sign flow for external signers
-    console.log("Signing link detected:", params.get("sign"), "idx:", params.get("idx"));
+  if(!params.has("sign")) return;
+  var pubDocId = params.get("sign");
+  var pubIdx = parseInt(params.get("idx")) || 0;
+  var pubDoc = null;
+  var pubState = { _cpr:"", sigImg:"", sigHash:"" };
+
+  q("loginScreen").classList.add("hidden");
+  q("appScreen").classList.add("hidden");
+
+  var wrap = document.createElement("div");
+  wrap.style.cssText = "min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;";
+  wrap.innerHTML = '<div style="width:100%;max-width:480px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:32px;" id="pubSignBox"><div style="text-align:center;padding:32px;color:var(--dim);">Indlæser...</div></div>';
+  document.body.appendChild(wrap);
+
+  function pr(html){ q("pubSignBox").innerHTML = '<div style="text-align:center;margin-bottom:20px;"><span style="background:linear-gradient(135deg,#3b7dff,#6c5ce7);color:#fff;padding:6px 14px;border-radius:8px;font-weight:700;font-size:16px;">SmartSign</span></div>' + html; }
+
+  function pubStep1(){
+    var s = pubDoc.signers[pubIdx];
+    pr('<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Bekræft identitet</div>'
+      +'<div style="font-size:13px;color:var(--dim);margin-bottom:24px;">'+esc(s.name)+' — '+esc(pubDoc.title)+'</div>'
+      +'<div class="fg"><label class="lbl">CPR-nummer</label><div class="cpr-wrap"><input id="pc1" maxlength="6" placeholder="DDMMÅÅ"><span class="cpr-dash">—</span><input id="pc2" maxlength="4" placeholder="XXXX"></div></div>'
+      +'<div class="btn-row"><button class="btn btn-p" id="pcBtn" disabled onclick="pubGoVerify()">Send e-mail-kode →</button></div>');
+    var s1=q("pc1"),s2=q("pc2");
+    function chk(){ q("pcBtn").disabled=!(s1.value.length===6&&s2.value.length===4); }
+    s1.addEventListener("input",function(){ this.value=this.value.replace(/\D/g,""); if(this.value.length>=6) s2.focus(); chk(); });
+    s2.addEventListener("input",function(){ this.value=this.value.replace(/\D/g,""); chk(); });
   }
+  window.pubStep1 = pubStep1;
+
+  window.pubGoVerify = async function(){
+    var s=pubDoc.signers[pubIdx];
+    pubState._cpr=q("pc1").value+"-"+q("pc2").value;
+    pr('<div style="text-align:center;padding:32px;color:var(--dim);">Sender kode...</div>');
+    try{ await cfPost("sendVerifyCode",{email:s.email,signerName:s.name,signingId:pubDocId,signerIdx:pubIdx,docTitle:pubDoc.title}); pubStep2(); }
+    catch(e){ pr('<div style="color:var(--red);text-align:center;">Fejl: '+e.message+'</div>'); }
+  };
+
+  function pubStep2(){
+    var s=pubDoc.signers[pubIdx];
+    var masked=s.email.replace(/^(.{2})(.*)(@.*)$/,function(m,a,b,c){return a+b.replace(/./g,"•")+c;});
+    pr('<div style="font-size:18px;font-weight:700;margin-bottom:4px;">E-mail-verifikation</div>'
+      +'<div style="text-align:center;padding:12px;background:var(--accent-glow);border-radius:var(--r);margin-bottom:16px;">Kode sendt til <span style="font-family:monospace;color:var(--accent);font-weight:600;">'+esc(masked)+'</span></div>'
+      +'<div class="sms-wrap">'+[0,1,2,3,4,5].map(function(j){return '<input class="sms-d pub-d" maxlength="1" data-i="'+j+'" inputmode="numeric">';}).join("")+'</div>'
+      +'<div id="pubSmsErr" style="text-align:center;color:var(--red);font-size:12px;display:none;">Forkert kode</div>'
+      +'<div style="text-align:center;font-size:12px;color:var(--dim);margin-bottom:8px;">Tjek din indbakke (og spam-mappe)</div>'
+      +'<div class="btn-row"><button class="btn btn-g" onclick="pubStep1()">← Tilbage</button><button class="btn btn-p" id="pubSmsBtn" disabled onclick="pubVerify()">Bekræft →</button></div>');
+    var digits=document.querySelectorAll(".pub-d");
+    digits.forEach(function(d){ 
+      d.addEventListener("input",function(){ this.value=this.value.replace(/\D/g,"").slice(0,1); var i=parseInt(this.dataset.i); if(this.value&&i<5) digits[i+1].focus(); var code=""; digits.forEach(function(x){code+=x.value;}); q("pubSmsBtn").disabled=code.length<6; });
+      d.addEventListener("keydown",function(e){ if(e.key==="Backspace"&&!this.value){var i=parseInt(this.dataset.i);if(i>0)digits[i-1].focus();} });
+    });
+    if(digits[0]) setTimeout(function(){digits[0].focus();},100);
+  }
+  window.pubStep2 = pubStep2;
+
+  window.pubVerify = async function(){
+    var code=""; document.querySelectorAll(".pub-d").forEach(function(x){code+=x.value;});
+    try{
+      var r=await cfPost("verifyCode",{code:code,signingId:pubDocId,signerIdx:pubIdx});
+      if(r.verified){pubStep3();}else{q("pubSmsErr").style.display="block";q("pubSmsErr").textContent=r.error||"Forkert kode";}
+    }catch(e){q("pubSmsErr").style.display="block";q("pubSmsErr").textContent="Verifikation fejlede";}
+  };
+
+  function pubStep3(){
+    pr('<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Tegn underskrift</div>'
+      +'<div class="sig-box"><canvas id="pubCanvas" height="180"></canvas><button class="sig-clear" onclick="pubClearSig()">Ryd</button></div>'
+      +'<div class="sig-hash" id="pubSigHash">Tegn din underskrift ovenfor...</div>'
+      +'<div class="btn-row"><button class="btn btn-g" onclick="pubStep2()">← Tilbage</button><button class="btn btn-s" id="pubSigBtn" disabled onclick="pubComplete()">✓ Underskriv</button></div>');
+    setTimeout(function(){
+      var pc=q("pubCanvas"); if(!pc) return;
+      var ctx=pc.getContext("2d"); pc.width=pc.offsetWidth; pc.height=180;
+      ctx.strokeStyle="#e4e7f0"; ctx.lineWidth=2.5; ctx.lineCap="round"; ctx.lineJoin="round";
+      var draw=false,has=false;
+      function gp(e){var r=pc.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(pc.width/r.width),y:(t.clientY-r.top)*(pc.height/r.height)};}
+      function gh(){var img=pc.toDataURL("image/png");var s=pubDoc.signers[pubIdx];var h=mkHash(img+"|"+pubState._cpr+"|"+s.name+"|"+Date.now()+"|"+pubDocId);q("pubSigHash").innerHTML="🔒 <strong>Hash:</strong> "+h.slice(0,32)+"...";q("pubSigBtn").disabled=false;pubState.sigImg=img;pubState.sigHash=h;}
+      window.pubClearSig=function(){ctx.clearRect(0,0,pc.width,pc.height);has=false;q("pubSigBtn").disabled=true;q("pubSigHash").textContent="Tegn din underskrift ovenfor...";};
+      pc.onmousedown=function(e){e.preventDefault();draw=true;var p=gp(e);ctx.beginPath();ctx.moveTo(p.x,p.y);};
+      pc.onmousemove=function(e){if(!draw)return;e.preventDefault();var p=gp(e);ctx.lineTo(p.x,p.y);ctx.stroke();has=true;};
+      pc.onmouseup=pc.onmouseleave=function(){if(!draw)return;draw=false;if(has)gh();};
+      pc.ontouchstart=function(e){e.preventDefault();draw=true;var p=gp(e);ctx.beginPath();ctx.moveTo(p.x,p.y);};
+      pc.ontouchmove=function(e){if(!draw)return;e.preventDefault();var p=gp(e);ctx.lineTo(p.x,p.y);ctx.stroke();has=true;};
+      pc.ontouchend=function(){if(!draw)return;draw=false;if(has)gh();};
+    },50);
+  }
+
+  window.pubComplete = async function(){
+    pr('<div style="text-align:center;padding:32px;color:var(--dim);">Gemmer underskrift...</div>');
+    try{
+      var s=pubDoc.signers[pubIdx];
+      var encCpr=encryptCpr(pubState._cpr,pubDoc.docKey||"default-key");
+      s.status="signed";s.signedAt=new Date().toISOString();s.sigHash=pubState.sigHash;s.sigImg=pubState.sigImg;s.cprEncrypted=encCpr;
+      await db.collection("signings").doc(pubDocId).update({signers:pubDoc.signers});
+      await db.collection("signings").doc(pubDocId).collection("audit").add({time:new Date().toISOString(),type:"ok",text:s.name+": Signeret via offentligt link"});
+      var allDone=pubDoc.signers.every(function(x){return x.status==="signed";});
+      if(allDone){
+        try{await cfPost("sendCompletionNotice",{recipients:pubDoc.signers,docTitle:pubDoc.title,signingId:pubDocId});}catch(e){}
+        await db.collection("signings").doc(pubDocId).update({status:"completed"});
+      }
+      pr('<div style="text-align:center;padding:32px;"><div style="font-size:48px;">✅</div><h2 style="color:var(--green);margin:16px 0 8px;">Dokument underskrevet!</h2><p style="color:var(--dim);">Tak, '+esc(s.name)+'. Din underskrift er registreret.</p></div>');
+    }catch(err){pr('<div style="color:var(--red);text-align:center;padding:32px;">Fejl: '+err.message+'</div>');}
+  };
+
+  db.collection("signings").doc(pubDocId).get().then(function(doc){
+    if(!doc.exists){pr('<div style="color:var(--red);text-align:center;">Dokument ikke fundet.</div>');return;}
+    pubDoc=doc.data();pubDoc.id=doc.id;
+    var s=pubDoc.signers[pubIdx];
+    if(!s){pr('<div style="color:var(--red);text-align:center;">Ugyldig underskriver.</div>');return;}
+    if(s.status==="signed"){pr('<div style="text-align:center;padding:32px;"><div style="font-size:48px;">✅</div><h2 style="color:var(--green);">Allerede underskrevet</h2></div>');return;}
+    pubStep1();
+  }).catch(function(err){pr('<div style="color:var(--red);text-align:center;">Fejl: '+err.message+'</div>');});
 })();
+
 
 })();
 </script>
