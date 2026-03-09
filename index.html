@@ -387,6 +387,9 @@ async function cfPost(endpoint, data){
 // AUTH
 // ══════════════════════════════════════
 auth.onAuthStateChanged(function(user){
+  // Ikke vis login/app hvis vi er på en public signing side
+  var isSigningLink = new URLSearchParams(window.location.search).has("sign");
+  if(isSigningLink) return;
   if(user){
     q("loginScreen").classList.add("hidden");
     q("appScreen").classList.remove("hidden");
@@ -995,8 +998,18 @@ async function renderAuditPage(){
   var pubDoc = null;
   var pubState = { _cpr:"", sigImg:"", sigHash:"" };
 
-  q("loginScreen").classList.add("hidden");
-  q("appScreen").classList.add("hidden");
+  // Skjul login når DOM er klar
+  function hideAndShow(){
+    var ls = document.getElementById("loginScreen");
+    var as = document.getElementById("appScreen");
+    if(ls) ls.classList.add("hidden");
+    if(as) as.classList.add("hidden");
+  }
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", hideAndShow);
+  } else {
+    hideAndShow();
+  }
 
   var wrap = document.createElement("div");
   wrap.style.cssText = "min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;";
