@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartSign — Digital Signeringsplatform</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#090b10">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Firebase compat SDK -->
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-firestore-compat.min.js"></script>
+
+<!-- AES encryption for CPR -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+
+<style>
+:root {
+  --bg:#090b10;--surface:#11141c;--raised:#171b26;--hover:#1c2130;
+  --border:#242a3a;--border-hi:#3a4460;--text:#e4e7f0;--dim:#8892ab;--muted:#505b74;
+  --red-brand:#E63946;--blue-brand:#2563EB;
+  --accent:#2563EB;--accent2:#E63946;--accent-g:linear-gradient(135deg,#E63946,#2563EB);
+  --accent-glow:rgba(37,99,235,.12);--green:#2ed47a;--green-bg:rgba(46,212,122,.08);
+  --orange:#ffb347;--orange-bg:rgba(255,179,71,.08);--red:#ff5c72;--red-bg:rgba(255,92,114,.08);
+  --r:10px;--rl:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:40px;width:380px;max-width:100%;text-align:center}
+.login-logo{display:inline-flex;align-items:center;gap:10px;font-size:22px;font-weight:700;margin-bottom:24px}
+.login-logo .logo-m{width:36px;height:36px;border-radius:8px;background:var(--accent-g);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:#fff}
+.login-err{color:var(--red);font-size:12px;margin-top:8px;display:none}
+
+/* HEADER */
+.hdr{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px}
+.logo-m{width:30px;height:30px;border-radius:7px;background:var(--accent-g);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#fff}
+.hdr-r{display:flex;align-items:center;gap:12px}
+.pill{font-size:10px;font-weight:600;padding:4px 12px;border-radius:16px;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.6px}
+.pill-ok{background:var(--green-bg);color:var(--green)}
+.pill-dot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--accent-g);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;cursor:pointer}
+.logout-btn{background:none;border:1px solid var(--border);color:var(--dim);font-family:inherit;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer}
+.logout-btn:hover{color:var(--text);background:var(--hover)}
+
+/* LAYOUT */
+.layout{display:flex;min-height:calc(100vh - 56px)}
+.side{width:240px;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;flex-shrink:0;display:flex;flex-direction:column;gap:2px}
+.main{flex:1;padding:28px 32px;overflow-y:auto;max-height:calc(100vh - 56px)}
+.side-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);padding:16px 12px 6px}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--dim);border:none;background:none;width:100%;text-align:left;transition:all .15s;font-family:inherit}
+.nav:hover{background:var(--hover);color:var(--text)}.nav.on{background:var(--accent-glow);color:var(--accent)}
+.nav-icon{font-size:16px;width:22px;text-align:center}
+.nav-badge{margin-left:auto;font-size:10px;font-weight:700;background:var(--accent);color:#fff;padding:1px 7px;border-radius:10px}
+.side-spacer{flex:1}
+
+/* COMMON */
+.page{display:none;animation:fadeUp .3s ease}.page.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.page-title{font-size:24px;font-weight:700;letter-spacing:-.4px;margin-bottom:4px}
+.page-desc{font-size:14px;color:var(--dim);margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:28px}.card+.card{margin-top:16px}.card-sm{padding:20px}
+.section-title{font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+/* FORM */
+.lbl{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:6px}
+.inp,.sel,.ta{width:100%;padding:10px 12px;background:var(--raised);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:inherit;font-size:13px;outline:none;transition:border .2s,box-shadow .2s}
+.inp:focus,.sel:focus,.ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.inp::placeholder,.ta::placeholder{color:var(--muted)}.ta{resize:vertical;min-height:70px}
+.fg{margin-bottom:16px}.frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fhint{font-size:10px;color:var(--muted);margin-top:3px}
+.cpr-wrap{display:flex;align-items:center;background:var(--raised);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:border .2s,box-shadow .2s}
+.cpr-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.cpr-wrap input{border:none;background:none;box-shadow:none!important;text-align:center;font-family:'JetBrains Mono',monospace;font-size:16px;letter-spacing:2px;padding:10px 6px;color:var(--text);outline:none;width:50%}
+.cpr-dash{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--muted)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 20px;border-radius:var(--r);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:#2e6fee;transform:translateY(-1px)}.btn-p:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-g{background:none;color:var(--dim);border:1px solid var(--border)}.btn-g:hover{background:var(--hover);color:var(--text)}
+.btn-s{background:var(--green);color:#fff}.btn-s:hover{background:#26b96a}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn-row{display:flex;align-items:center;justify-content:space-between;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+.tbl td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border:none}.tbl tr:hover td{background:var(--raised)}
+.status{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.s-wait{background:var(--orange-bg);color:var(--orange)}.s-done{background:var(--green-bg);color:var(--green)}.s-exp{background:var(--red-bg);color:var(--red)}
+.clickable{cursor:pointer}.clickable:hover{color:var(--accent)}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:20px}
+.stat-val{font-size:28px;font-weight:700;letter-spacing:-.5px;font-family:'JetBrains Mono',monospace}
+.stat-lbl{font-size:11px;color:var(--dim);margin-top:4px}
+
+/* SIGNERS */
+.signers-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.signer-chip{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:var(--r);flex-wrap:wrap}
+.signer-chip .av{width:28px;height:28px;border-radius:50%;background:var(--accent-g);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.signer-chip .info{flex:1;min-width:0}.signer-chip .name{font-size:13px;font-weight:600}.signer-chip .email{font-size:11px;color:var(--dim)}
+.signer-chip .rm{cursor:pointer;color:var(--red);font-size:16px;padding:2px;opacity:.6}.signer-chip .rm:hover{opacity:1}
+.add-signer-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end}
+
+/* SMS */
+.sms-wrap{display:flex;gap:8px;justify-content:center;margin:20px 0}
+.sms-d{width:46px;height:54px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;background:var(--raised);border:2px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;transition:all .2s}
+.sms-d:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+
+/* SIGNATURE */
+.sig-box{position:relative;border:2px solid var(--border);border-radius:var(--r);overflow:hidden;background:#080a0f;margin:12px 0}
+.sig-box canvas{display:block;width:100%;cursor:crosshair}
+.sig-clear{position:absolute;bottom:8px;right:8px;padding:5px 10px;font-size:10px;font-weight:600;background:var(--surface);border:1px solid var(--border);color:var(--dim);border-radius:6px;cursor:pointer;font-family:inherit}.sig-clear:hover{color:var(--text)}
+.sig-hash{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);word-break:break-all;padding:8px 10px;background:var(--raised);border-radius:var(--r);margin-top:6px}
+
+/* AUDIT */
+.audit{display:flex;flex-direction:column;gap:0;position:relative;padding-left:20px}
+.audit::before{content:'';position:absolute;left:6px;top:8px;bottom:8px;width:2px;background:var(--border)}
+.audit-item{position:relative;padding:10px 0 10px 16px}
+.audit-item::before{content:'';position:absolute;left:-17px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--border);border:2px solid var(--bg)}
+.audit-item.a-ok::before{background:var(--green)}.audit-item.a-warn::before{background:var(--orange)}.audit-item.a-info::before{background:var(--accent)}
+.audit-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+.audit-text{font-size:13px;margin-top:2px}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center}
+.modal-bg.on{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:32px;width:560px;max-width:92vw;max-height:85vh;overflow-y:auto;animation:fadeUp .25s ease}
+
+/* UPLOAD */
+.upzone{border:2px dashed var(--border);border-radius:var(--rl);padding:32px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--raised)}
+.upzone:hover,.upzone.drag{border-color:var(--accent);background:var(--accent-glow)}
+.upzone-icon{font-size:32px;margin-bottom:8px;opacity:.6}.upzone-text{font-size:13px;color:var(--dim)}.upzone-text b{color:var(--accent)}
+.file-tag{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--raised);border:1px solid var(--border);border-radius:var(--r);margin-top:10px}
+.file-tag .fi{font-size:20px}.file-tag .fn{flex:1;font-size:12px;font-weight:600}.file-tag .fs{font-size:10px;color:var(--muted)}.file-tag .fx{cursor:pointer;color:var(--red);font-size:16px}
+
+/* STEPS */
+.nstep{display:flex;align-items:center;gap:8px;padding:8px 16px;position:relative;flex:1}
+.nstep:not(:last-child)::after{content:'';position:absolute;right:0;top:50%;width:20px;height:1px;background:var(--border)}
+.ns-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid var(--border);color:var(--muted);transition:all .3s}
+.ns-lbl{font-size:12px;font-weight:500;color:var(--muted)}
+.nstep.active .ns-num{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+.nstep.active .ns-lbl{color:var(--text)}
+.nstep.done .ns-num{border-color:var(--green);background:var(--green);color:#fff}
+.nstep.done .ns-lbl{color:var(--green)}
+
+/* SPINNER */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{position:fixed;inset:0;background:rgba(9,11,16,.8);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px;font-size:14px;color:var(--dim)}
+
+/* MOBILE NAV */
+.mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 env(safe-area-inset-bottom,6px);z-index:300;justify-content:space-around}
+.mob-nav button{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--muted);font-family:inherit;font-size:10px;font-weight:600;padding:6px 12px;cursor:pointer;border-radius:8px;transition:all .15s}
+.mob-nav button.on{color:var(--accent)}.mob-nav button .mn-icon{font-size:20px}
+.hidden{display:none!important}
+
+@media(max-width:768px){
+  .side{display:none}.main{padding:20px 16px 100px}
+  .stats{grid-template-columns:1fr 1fr}.stat-val{font-size:22px}
+  .frow{grid-template-columns:1fr}.add-signer-row{grid-template-columns:1fr}
+  .modal{padding:24px 18px}.mob-nav{display:flex}.pill{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <svg viewBox="0 0 200 70" width="200" height="70" style="display:block;margin:0 auto 8px;">
+        <defs>
+          <clipPath id="lL"><rect x="0" y="0" width="24" height="70"/></clipPath>
+          <clipPath id="lR"><rect x="24" y="0" width="24" height="70"/></clipPath>
+        </defs>
+        <g transform="translate(6,5)">
+          <text x="0" y="48" font-family="Poppins,sans-serif" font-size="52" font-weight="800" clip-path="url(#lL)" fill="#E63946">S</text>
+          <text x="0" y="48" font-family="Poppins,sans-serif" font-size="52" font-weight="800" clip-path="url(#lR)" fill="#2563EB">S</text>
+        </g>
+        <text x="46" y="32" font-family="Poppins,sans-serif" font-size="24" font-weight="700" fill="#E63946">mart</text>
+        <text x="46" y="58" font-family="Poppins,sans-serif" font-size="24" font-weight="700" fill="#2563EB">ign</text>
+      </svg>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin-bottom:24px">Digital signeringsplatform</div>
+    <div class="fg"><label class="lbl">E-mail</label><input class="inp" type="email" id="loginEmail" placeholder="din@email.dk"></div>
+    <div class="fg"><label class="lbl">Adgangskode</label><input class="inp" type="password" id="loginPass" placeholder="••••••••"></div>
+    <div class="login-err" id="loginErr"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:12px" id="loginBtn">Log ind</button>
+    <button class="btn btn-g" style="width:100%;margin-top:8px" id="registerBtn">Opret konto</button>
+  </div>
+</div>
+
+<!-- ═══ APP (hidden until login) ═══ -->
+<div id="appScreen" class="hidden">
+<header class="hdr">
+  <div class="logo">
+    <svg viewBox="0 0 160 44" width="140" height="38">
+      <defs>
+        <clipPath id="hL"><rect x="0" y="0" width="16" height="44"/></clipPath>
+        <clipPath id="hR"><rect x="16" y="0" width="16" height="44"/></clipPath>
+      </defs>
+      <g transform="translate(2,2)">
+        <text x="0" y="32" font-family="Poppins,sans-serif" font-size="34" font-weight="800" clip-path="url(#hL)" fill="#E63946">S</text>
+        <text x="0" y="32" font-family="Poppins,sans-serif" font-size="34" font-weight="800" clip-path="url(#hR)" fill="#2563EB">S</text>
+      </g>
+      <text x="30" y="20" font-family="Poppins,sans-serif" font-size="15" font-weight="700" fill="#E63946">mart</text>
+      <text x="30" y="37" font-family="Poppins,sans-serif" font-size="15" font-weight="700" fill="#2563EB">ign</text>
+    </svg>
+  </div>
+  <div class="hdr-r">
+    <div class="pill pill-ok"><span class="pill-dot"></span>Krypteret</div>
+    <span id="userEmail" style="font-size:11px;color:var(--dim)"></span>
+    <button class="logout-btn" id="logoutBtn">Log ud</button>
+  </div>
+</header>
+<div class="layout">
+  <nav class="side">
+    <div class="side-lbl">Menu</div>
+    <button class="nav on" data-page="dashboard"><span class="nav-icon">📊</span>Dashboard<span class="nav-badge" id="pendingBadge">0</span></button>
+    <button class="nav" data-page="new"><span class="nav-icon">✏️</span>Ny signering</button>
+    <button class="nav" data-page="audit"><span class="nav-icon">📋</span>Audit trail</button>
+    <div class="side-spacer"></div>
+    <div style="padding:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);margin-top:8px">SmartSign v1.0<br>Pakkepiloten</div>
+  </nav>
+  <div class="main">
+    <!-- DASHBOARD -->
+    <div class="page on" id="pg-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-desc">Overblik over alle signeringer</div>
+      <div class="stats">
+        <div class="stat"><div class="stat-val" id="st-total">0</div><div class="stat-lbl">Total</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--orange)" id="st-pending">0</div><div class="stat-lbl">Afventer</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--green)" id="st-done">0</div><div class="stat-lbl">Fuldført</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--red)" id="st-exp">0</div><div class="stat-lbl">Udløbet</div></div>
+      </div>
+      <div class="card card-sm">
+        <div class="section-title">Signeringer</div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Dokument</th><th>Oprettet</th><th>Underskrivere</th><th>Status</th><th></th></tr></thead><tbody id="docTable"></tbody></table></div>
+        <div id="emptyState" style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Ingen signeringer endnu.</div>
+      </div>
+    </div>
+    <!-- NY SIGNERING -->
+    <div class="page" id="pg-new">
+      <div class="page-title">Ny signering</div>
+      <div class="page-desc">Upload dokument, tilføj underskrivere og send til signering</div>
+      <div style="display:flex;gap:0;margin-bottom:28px">
+        <div class="nstep active" data-s="1"><span class="ns-num">1</span><span class="ns-lbl">Dokument</span></div>
+        <div class="nstep" data-s="2"><span class="ns-num">2</span><span class="ns-lbl">Underskrivere</span></div>
+        <div class="nstep" data-s="3"><span class="ns-num">3</span><span class="ns-lbl">Opsummering</span></div>
+      </div>
+      <div class="card ns-card" id="ns1">
+        <div class="section-title">Dokument</div>
+        <div class="upzone" id="upZone"><div class="upzone-icon">📎</div><div class="upzone-text">Træk fil hertil eller <b>klik for at vælge</b></div><div style="font-size:10px;color:var(--muted);margin-top:6px">PDF, DOCX, PNG, JPG — maks 10 MB</div></div>
+        <input type="file" id="upFile" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg" style="display:none">
+        <div id="upPreview"></div>
+        <div class="fg" style="margin-top:20px"><label class="lbl">Dokumenttitel</label><input class="inp" type="text" id="nDocTitle" placeholder="F.eks. Lejekontrakt — Marts 2026"></div>
+        <div class="fg"><label class="lbl">Frist for signering</label><input class="inp" type="date" id="nDeadline"></div>
+        <div class="btn-row"><div></div><button class="btn btn-p" id="ns1Next" disabled>Næste →</button></div>
+      </div>
+      <div class="card ns-card" id="ns2" style="display:none">
+        <div class="section-title">Underskrivere</div>
+        <div class="add-signer-row">
+          <div class="fg" style="margin:0"><label class="lbl">Navn</label><input class="inp" id="asName" placeholder="Navn"></div>
+          <div class="fg" style="margin:0"><label class="lbl">E-mail</label><input class="inp" id="asEmail" placeholder="email@firma.dk"></div>
+          <div class="fg" style="margin:0"><label class="lbl">Mobil</label><input class="inp" id="asPhone" placeholder="+45 12345678"></div>
+          <button class="btn btn-p btn-sm" id="addSignerBtn" style="height:38px;margin-bottom:1px">+ Tilføj</button>
+        </div>
+        <div class="signers-list" id="signersList"></div>
+        <div id="noSigners" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Ingen underskrivere tilføjet</div>
+        <div class="btn-row"><button class="btn btn-g" id="ns2Back">← Tilbage</button><button class="btn btn-p" id="ns2Next" disabled>Næste →</button></div>
+      </div>
+      <div class="card ns-card" id="ns3" style="display:none">
+        <div class="section-title">Opsummering</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+          <div style="padding:12px;background:var(--raised);border-radius:var(--r)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Dokument</div><div style="font-size:14px;font-weight:600;margin-top:4px" id="sumDoc">—</div></div>
+          <div style="padding:12px;background:var(--raised);border-radius:var(--r)"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px">Frist</div><div style="font-size:14px;font-weight:600;margin-top:4px" id="sumDate">—</div></div>
+        </div>
+        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:8px">Underskrivere (<span id="sumCount">0</span>)</div>
+        <div id="sumSigners"></div>
+        <div class="fg" style="margin-top:20px"><label class="lbl">Besked (valgfrit)</label><textarea class="ta" id="nMessage" placeholder="Hermed fremsendes dokumentet til signering..."></textarea></div>
+        <div class="btn-row"><button class="btn btn-g" id="ns3Back">← Tilbage</button><button class="btn btn-s" id="createBtn">✉ Opret &amp; send</button></div>
+      </div>
+    </div>
+    <!-- AUDIT -->
+    <div class="page" id="pg-audit">
+      <div class="page-title">Audit trail</div>
+      <div class="page-desc">Komplet transaktionslog</div>
+      <div class="card card-sm"><div class="audit" id="auditLog"><div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Indlæser...</div></div></div>
+    </div>
+  </div>
+</div>
+<div class="mob-nav" id="mobNav">
+  <button class="on" data-page="dashboard"><span class="mn-icon">📊</span>Dashboard</button>
+  <button data-page="new"><span class="mn-icon">✏️</span>Ny</button>
+  <button data-page="audit"><span class="mn-icon">📋</span>Audit</button>
+</div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-bg" id="signModal"><div class="modal" id="signFlow"></div></div>
+<div class="modal-bg" id="detailModal"><div class="modal" id="detailContent"></div></div>
+<div class="loading-overlay hidden" id="loadingOverlay"><div class="spinner" style="width:28px;height:28px;border-width:3px"></div><span>Behandler...</span></div>
+
+<script>
+(function(){
+"use strict";
+
+// ══════════════════════════════════════
+// FIREBASE CONFIG
+// ══════════════════════════════════════
+var firebaseConfig = {
+  apiKey: "AIzaSyBYPLDfEok3Zs8mjefhAqM-tEWzzkZWJak",
+  authDomain: "smartsign-7884b.firebaseapp.com",
+  projectId: "smartsign-7884b",
+  storageBucket: "smartsign-7884b.firebasestorage.app",
+  messagingSenderId: "432073010744",
+  appId: "1:432073010744:web:e1e5b41d5f5238ccbd00cd"
+};
+
+// Cloud Functions base URL — opdater efter deploy
+var CF_BASE = "https://us-central1-smartsign-7884b.cloudfunctions.net";
+
+// ══════════════════════════════════════
+// INIT FIREBASE
+// ══════════════════════════════════════
+firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+var db = firebase.firestore();
+
+// ══════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════
+function q(id){ return document.getElementById(id); }
+function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+function fmtDate(s){ try { return new Date(s).toLocaleDateString("da-DK"); } catch(e){ return s; } }
+function fmtDateTime(s){ try { var d = new Date(s); return d.toLocaleDateString("da-DK") + " " + d.toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"}); } catch(e){ return s; } }
+function showLoading(){ q("loadingOverlay").classList.remove("hidden"); }
+function hideLoading(){ q("loadingOverlay").classList.add("hidden"); }
+
+// CPR encryption with AES
+function encryptCpr(cpr, docKey){
+  return CryptoJS.AES.encrypt(cpr, docKey).toString();
+}
+function decryptCpr(encrypted, docKey){
+  var bytes = CryptoJS.AES.decrypt(encrypted, docKey);
+  return bytes.toString(CryptoJS.enc.Utf8);
+}
+function generateDocKey(){
+  return CryptoJS.lib.WordArray.random(32).toString();
+}
+
+function mkHash(str){
+  return CryptoJS.SHA256(str).toString();
+}
+
+function getDocStatus(d){
+  var allSigned = d.signers.every(function(s){ return s.status === "signed"; });
+  if(allSigned && d.signers.length > 0) return "done";
+  if(d.deadline && new Date(d.deadline) < new Date()) return "expired";
+  return "pending";
+}
+
+async function cfPost(endpoint, data){
+  var resp = await fetch(CF_BASE + "/" + endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  return resp.json();
+}
+
+// ══════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════
+auth.onAuthStateChanged(function(user){
+  if(user){
+    q("loginScreen").classList.add("hidden");
+    q("appScreen").classList.remove("hidden");
+    q("userEmail").textContent = user.email;
+    loadSignings();
+  } else {
+    q("loginScreen").classList.remove("hidden");
+    q("appScreen").classList.add("hidden");
+  }
+});
+
+q("loginBtn").addEventListener("click", async function(){
+  var email = q("loginEmail").value.trim();
+  var pass = q("loginPass").value;
+  q("loginErr").style.display = "none";
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch(e){
+    q("loginErr").textContent = e.code === "auth/user-not-found" ? "Bruger ikke fundet" : e.code === "auth/wrong-password" ? "Forkert adgangskode" : e.message;
+    q("loginErr").style.display = "block";
+  }
+});
+
+q("registerBtn").addEventListener("click", async function(){
+  var email = q("loginEmail").value.trim();
+  var pass = q("loginPass").value;
+  q("loginErr").style.display = "none";
+  if(pass.length < 6){ q("loginErr").textContent = "Adgangskode skal være mindst 6 tegn"; q("loginErr").style.display = "block"; return; }
+  try {
+    await auth.createUserWithEmailAndPassword(email, pass);
+  } catch(e){
+    q("loginErr").textContent = e.code === "auth/email-already-in-use" ? "E-mail er allerede i brug" : e.message;
+    q("loginErr").style.display = "block";
+  }
+});
+
+q("logoutBtn").addEventListener("click", function(){ auth.signOut(); });
+
+// ══════════════════════════════════════
+// NAV
+// ══════════════════════════════════════
+document.querySelectorAll(".nav[data-page]").forEach(function(btn){ btn.addEventListener("click", function(){ showPage(this.dataset.page); }); });
+document.querySelectorAll("#mobNav button[data-page]").forEach(function(btn){ btn.addEventListener("click", function(){ showPage(this.dataset.page); }); });
+
+function showPage(id){
+  document.querySelectorAll(".page").forEach(function(p){ p.classList.remove("on"); });
+  q("pg-" + id).classList.add("on");
+  document.querySelectorAll(".nav[data-page]").forEach(function(n){ n.classList.toggle("on", n.dataset.page === id); });
+  document.querySelectorAll("#mobNav button[data-page]").forEach(function(n){ n.classList.toggle("on", n.dataset.page === id); });
+  if(id === "dashboard") renderDashboard();
+  if(id === "audit") renderAuditPage();
+  if(id === "new") resetNewForm();
+}
+
+// ══════════════════════════════════════
+// FIRESTORE — LOAD SIGNINGS
+// ══════════════════════════════════════
+var allDocs = [];
+
+async function loadSignings(){
+  var uid = auth.currentUser.uid;
+  var snap = await db.collection("signings").where("ownerId", "==", uid).orderBy("created", "desc").get();
+  allDocs = [];
+  snap.forEach(function(doc){ allDocs.push(Object.assign({ id: doc.id }, doc.data())); });
+  renderDashboard();
+}
+
+// ══════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════
+function renderDashboard(){
+  var total = allDocs.length, pending = 0, done = 0, exp = 0;
+  allDocs.forEach(function(d){ var st = getDocStatus(d); if(st === "done") done++; else if(st === "expired") exp++; else pending++; });
+  q("st-total").textContent = total; q("st-pending").textContent = pending; q("st-done").textContent = done; q("st-exp").textContent = exp;
+  q("pendingBadge").textContent = pending;
+  var tb = q("docTable"), es = q("emptyState");
+  if(!allDocs.length){ tb.innerHTML = ""; es.style.display = "block"; return; }
+  es.style.display = "none";
+  var html = "";
+  allDocs.forEach(function(d){
+    var st = getDocStatus(d);
+    var sc = d.signers.filter(function(s){ return s.status === "signed"; }).length;
+    var stH = st === "done" ? '<span class="status s-done">✓ Fuldført</span>' : st === "expired" ? '<span class="status s-exp">Udløbet</span>' : '<span class="status s-wait">' + sc + "/" + d.signers.length + " signeret</span>";
+    var actionBtn = st === "done" ? '<button class="btn btn-p btn-sm" data-dl="' + d.id + '">⬇ Download</button>' : '<button class="btn btn-g btn-sm" data-open="' + d.id + '">Åbn</button>';
+    html += "<tr><td><span class='clickable' data-open='" + d.id + "'>" + esc(d.title) + "</span></td><td style='font-size:12px;color:var(--dim)'>" + fmtDate(d.created) + "</td><td>" + sc + "/" + d.signers.length + "</td><td>" + stH + "</td><td>" + actionBtn + "</td></tr>";
+  });
+  tb.innerHTML = html;
+}
+q("docTable").addEventListener("click", function(e){
+  var t = e.target.closest("[data-open]"); if(t){ openDetail(t.dataset.open); return; }
+  var dl = e.target.closest("[data-dl]"); if(dl) downloadDoc(dl.dataset.dl);
+});
+
+// ══════════════════════════════════════
+// NY SIGNERING
+// ══════════════════════════════════════
+var newData = { file:null, title:"", deadline:"", signers:[], message:"" };
+function resetNewForm(){
+  newData = { file:null, title:"", deadline:"", signers:[], message:"" };
+  q("upPreview").innerHTML = ""; q("upZone").style.display = ""; q("nDocTitle").value = ""; q("nDeadline").value = ""; q("upFile").value = ""; q("signersList").innerHTML = ""; q("noSigners").style.display = ""; q("nMessage").value = "";
+  nsGo(1); checkNs1();
+}
+function nsGo(n){
+  document.querySelectorAll(".ns-card").forEach(function(c){ c.style.display = "none"; });
+  q("ns" + n).style.display = "";
+  document.querySelectorAll(".nstep").forEach(function(s){ var sn = parseInt(s.dataset.s); s.classList.remove("active","done"); if(sn < n) s.classList.add("done"); if(sn === n) s.classList.add("active"); });
+}
+
+q("upZone").addEventListener("click", function(){ q("upFile").click(); });
+q("upZone").addEventListener("dragover", function(e){ e.preventDefault(); this.classList.add("drag"); });
+q("upZone").addEventListener("dragleave", function(){ this.classList.remove("drag"); });
+q("upZone").addEventListener("drop", function(e){ e.preventDefault(); this.classList.remove("drag"); if(e.dataTransfer.files.length) handleUp(e.dataTransfer.files[0]); });
+q("upFile").addEventListener("change", function(){ if(this.files.length) handleUp(this.files[0]); });
+
+function handleUp(f){
+  if(f.size > 10*1024*1024){ alert("Filen er for stor (maks 10 MB)"); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    newData.file = { name:f.name, size:f.size, type:f.type, data:ev.target.result };
+    var sz = f.size < 1024*1024 ? (f.size/1024).toFixed(0) + " KB" : (f.size/1024/1024).toFixed(1) + " MB";
+    var icon = /\.pdf$/i.test(f.name) ? "📕" : /\.docx?$/i.test(f.name) ? "📘" : "🖼️";
+    q("upPreview").innerHTML = '<div class="file-tag"><span class="fi">' + icon + '</span><span class="fn">' + esc(f.name) + '</span><span class="fs">' + sz + '</span><span class="fx" id="removeUpBtn">✕</span></div>';
+    q("upZone").style.display = "none";
+    if(!q("nDocTitle").value) q("nDocTitle").value = f.name.replace(/\.[^.]+$/, "");
+    checkNs1();
+  };
+  reader.readAsDataURL(f);
+}
+q("upPreview").addEventListener("click", function(e){ if(e.target.id === "removeUpBtn"){ newData.file = null; q("upPreview").innerHTML = ""; q("upZone").style.display = ""; q("upFile").value = ""; checkNs1(); } });
+q("nDocTitle").addEventListener("input", checkNs1);
+q("nDeadline").addEventListener("input", checkNs1);
+function checkNs1(){ q("ns1Next").disabled = !(newData.file && q("nDocTitle").value.trim()); }
+q("ns1Next").addEventListener("click", function(){ newData.title = q("nDocTitle").value.trim(); newData.deadline = q("nDeadline").value; nsGo(2); });
+
+q("addSignerBtn").addEventListener("click", function(){
+  var n = q("asName").value.trim(), e = q("asEmail").value.trim(), p = q("asPhone").value.trim();
+  if(!n || !e){ alert("Navn og e-mail er påkrævet"); return; }
+  newData.signers.push({ name:n, email:e, phone:p, status:"pending", signedAt:null, cprEncrypted:"", sigHash:"", sigImg:"" });
+  q("asName").value = ""; q("asEmail").value = ""; q("asPhone").value = "";
+  renderSignersList();
+});
+function renderSignersList(){
+  var el = q("signersList"), ns = q("noSigners");
+  if(!newData.signers.length){ el.innerHTML = ""; ns.style.display = ""; q("ns2Next").disabled = true; return; }
+  ns.style.display = "none"; q("ns2Next").disabled = false;
+  el.innerHTML = newData.signers.map(function(s, i){ return '<div class="signer-chip"><div class="av">' + s.name.charAt(0).toUpperCase() + '</div><div class="info"><div class="name">' + esc(s.name) + '</div><div class="email">' + esc(s.email) + '</div></div><span class="rm" data-rmidx="' + i + '">✕</span></div>'; }).join("");
+}
+q("signersList").addEventListener("click", function(e){ var t = e.target.closest("[data-rmidx]"); if(t){ newData.signers.splice(parseInt(t.dataset.rmidx), 1); renderSignersList(); } });
+q("ns2Back").addEventListener("click", function(){ nsGo(1); });
+q("ns2Next").addEventListener("click", function(){ nsGo(3); q("sumDoc").textContent = newData.title; q("sumDate").textContent = newData.deadline ? fmtDate(newData.deadline) : "Ingen frist"; q("sumCount").textContent = newData.signers.length; q("sumSigners").innerHTML = newData.signers.map(function(s,i){ return '<div class="signer-chip"><div class="av">' + (i+1) + '</div><div class="info"><div class="name">' + esc(s.name) + '</div><div class="email">' + esc(s.email) + '</div></div></div>'; }).join(""); });
+q("ns3Back").addEventListener("click", function(){ nsGo(2); });
+
+// CREATE SIGNING — save to Firestore + send emails
+q("createBtn").addEventListener("click", async function(){
+  showLoading();
+  try {
+    var docKey = generateDocKey();
+    var signingData = {
+      title: newData.title,
+      fileName: newData.file.name,
+      fileData: newData.file.data,
+      deadline: newData.deadline || null,
+      message: q("nMessage").value.trim(),
+      created: new Date().toISOString(),
+      ownerId: auth.currentUser.uid,
+      ownerEmail: auth.currentUser.email,
+      docKey: docKey,
+      signers: newData.signers.map(function(s){ return { name:s.name, email:s.email, phone:s.phone, status:"pending", signedAt:null, cprEncrypted:"", sigHash:"", sigImg:"" }; })
+    };
+
+    var docRef = await db.collection("signings").add(signingData);
+
+    // Add audit log
+    await db.collection("signings").doc(docRef.id).collection("audit").add({ time:new Date().toISOString(), type:"info", text:"Signering oprettet af " + auth.currentUser.email });
+
+    // Send emails to all signers
+    var baseUrl = window.location.origin + window.location.pathname;
+    for(var i = 0; i < newData.signers.length; i++){
+      var s = newData.signers[i];
+      var signingUrl = baseUrl + "?sign=" + docRef.id + "&idx=" + i;
+      try {
+        await cfPost("sendSigningEmail", {
+          to: s.email,
+          signerName: s.name,
+          docTitle: newData.title,
+          signingUrl: signingUrl,
+          message: q("nMessage").value.trim(),
+          deadline: newData.deadline ? fmtDate(newData.deadline) : null
+        });
+        await db.collection("signings").doc(docRef.id).collection("audit").add({ time:new Date().toISOString(), type:"info", text:"Invitation sendt til " + s.name + " (" + s.email + ")" });
+      } catch(emailErr){
+        console.error("Email fejl:", emailErr);
+      }
+    }
+
+    await loadSignings();
+    hideLoading();
+    showPage("dashboard");
+  } catch(err){
+    hideLoading();
+    alert("Fejl ved oprettelse: " + err.message);
+    console.error(err);
+  }
+});
+
+// ══════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════
+function openDetail(id){
+  var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
+  var st = getDocStatus(d);
+  var h = '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px"><div><div style="font-size:20px;font-weight:700">' + esc(d.title) + '</div><div style="font-size:12px;color:var(--dim);margin-top:4px">Oprettet ' + fmtDate(d.created) + (d.deadline ? " · Frist: " + fmtDate(d.deadline) : "") + '</div></div><button class="btn btn-g btn-sm" data-close>✕</button></div>';
+  h += '<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:10px">Underskrivere</div>';
+  d.signers.forEach(function(s, i){
+    var badge = s.status === "signed" ? '<span class="status s-done">✓ Signeret</span>' : '<span class="status s-wait">Afventer</span>';
+    var btns = s.status !== "signed" ? ' <button class="btn btn-p btn-sm" data-sign="' + i + '">Underskriv</button> <button class="btn btn-g btn-sm" data-remind="' + i + '">📧</button>' : "";
+    h += '<div class="signer-chip"><div class="av">' + s.name.charAt(0).toUpperCase() + '</div><div class="info"><div class="name">' + esc(s.name) + '</div><div class="email">' + esc(s.email) + (s.signedAt ? " · " + fmtDate(s.signedAt) : "") + '</div></div>' + badge + btns + '</div>';
+  });
+  if(st === "done"){
+    h += '<div style="text-align:center;margin-top:24px;padding:20px;background:var(--green-bg);border-radius:var(--rl)"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="font-size:16px;font-weight:700">Alle har underskrevet!</div><button class="btn btn-s" style="margin-top:12px" data-dldoc>⬇ Download signeret dokument</button></div>';
+  }
+  q("detailContent").innerHTML = h;
+  q("detailModal").classList.add("on");
+  q("detailContent").onclick = function(e){
+    if(e.target.closest("[data-close]")){ q("detailModal").classList.remove("on"); return; }
+    var signBtn = e.target.closest("[data-sign]");
+    if(signBtn){ q("detailModal").classList.remove("on"); startSign(id, parseInt(signBtn.dataset.sign)); return; }
+    var remBtn = e.target.closest("[data-remind]");
+    if(remBtn){ sendReminder(id, parseInt(remBtn.dataset.remind)); return; }
+    if(e.target.closest("[data-dldoc]")) downloadDoc(id);
+  };
+}
+q("detailModal").addEventListener("click", function(e){ if(e.target === this) this.classList.remove("on"); });
+
+async function sendReminder(docId, idx){
+  var d = allDocs.find(function(x){ return x.id === docId; }); var s = d.signers[idx];
+  showLoading();
+  try {
+    var baseUrl = window.location.origin + window.location.pathname;
+    await cfPost("sendReminder", { to:s.email, signerName:s.name, docTitle:d.title, signingUrl:baseUrl + "?sign=" + docId + "&idx=" + idx, deadline:d.deadline ? fmtDate(d.deadline) : null });
+    await db.collection("signings").doc(docId).collection("audit").add({ time:new Date().toISOString(), type:"warn", text:"Påmindelse sendt til " + s.name });
+  } catch(e){ console.error(e); }
+  hideLoading();
+  alert("Påmindelse sendt til " + s.email);
+}
+
+// ══════════════════════════════════════
+// SIGNING FLOW
+// ══════════════════════════════════════
+var signState = { docId:"", idx:0, smsCode:"", step:1, sigImg:"", sigHash:"" };
+function startSign(docId, idx){
+  signState = { docId:docId, idx:idx, step:1, sigImg:"", sigHash:"" };
+  renderSignStep(); q("signModal").classList.add("on");
+}
+q("signModal").addEventListener("click", function(e){ if(e.target === this) this.classList.remove("on"); });
+
+function renderSignStep(){
+  var d = allDocs.find(function(x){ return x.id === signState.docId; });
+  var s = d.signers[signState.idx];
+  var h = "";
+
+  if(signState.step === 1){
+    h = '<div style="font-size:18px;font-weight:700;margin-bottom:4px">Bekræft identitet</div>'
+      + '<div style="font-size:13px;color:var(--dim);margin-bottom:24px">' + esc(s.name) + ' — indtast CPR-nummer</div>'
+      + '<div class="fg"><label class="lbl">CPR-nummer</label><div class="cpr-wrap"><input id="sc1" maxlength="6" placeholder="DDMMÅÅ"><span class="cpr-dash">—</span><input id="sc2" maxlength="4" placeholder="XXXX"></div></div>'
+      + '<div class="btn-row"><button class="btn btn-g" data-action="close">Annuller</button><button class="btn btn-p" id="sc1Btn" disabled data-action="toSms">Send e-mail-kode →</button></div>';
+  } else if(signState.step === 2){
+    var masked = s.email.replace(/^(.{2})(.*)(@.*)$/, function(m,a,b,c){ return a + b.replace(/./g,"•") + c; });
+    h = '<div style="font-size:18px;font-weight:700;margin-bottom:4px">E-mail-verifikation</div>'
+      + '<div style="text-align:center;padding:12px;background:var(--accent-glow);border-radius:var(--r);margin-bottom:16px">Kode sendt til <span style="font-family:JetBrains Mono,monospace;color:var(--accent);font-weight:600">' + esc(masked) + '</span></div>'
+      + '<div class="sms-wrap">';
+    for(var j = 0; j < 6; j++) h += '<input class="sms-d" maxlength="1" data-i="' + j + '" inputmode="numeric">';
+    h += '</div><div id="smsErr" style="text-align:center;color:var(--red);font-size:12px;display:none">Forkert kode</div>'
+      + '<div style="text-align:center;font-size:12px;color:var(--dim);margin-bottom:8px">Tjek din indbakke (og spam-mappe)</div>'
+      + '<div class="btn-row"><button class="btn btn-g" data-action="backCpr">← Tilbage</button><button class="btn btn-p" id="smsBtn" disabled data-action="verifySms">Bekræft →</button></div>';
+  } else if(signState.step === 3){
+    h = '<div style="font-size:18px;font-weight:700;margin-bottom:4px">Tegn underskrift</div>'
+      + '<div class="sig-box"><canvas id="mSigCanvas" height="180"></canvas><button class="sig-clear" data-action="clearSig">Ryd</button></div>'
+      + '<div class="sig-hash" id="mSigHash">Tegn din underskrift ovenfor...</div>'
+      + '<div class="btn-row"><button class="btn btn-g" data-action="backSms">← Tilbage</button><button class="btn btn-s" id="sigBtn" disabled data-action="complete">✓ Underskriv</button></div>';
+  }
+  q("signFlow").innerHTML = h;
+  if(signState.step === 1) initCprInputs();
+  if(signState.step === 2) initSmsDigits();
+  if(signState.step === 3) setTimeout(initSigPad, 50);
+}
+
+q("signFlow").addEventListener("click", function(e){
+  var btn = e.target.closest("[data-action]"); if(!btn) return;
+  var a = btn.dataset.action;
+  if(a === "close") q("signModal").classList.remove("on");
+  else if(a === "toSms") goToSms();
+  else if(a === "backCpr"){ signState.step = 1; renderSignStep(); }
+  else if(a === "verifySms") verifySms();
+  else if(a === "backSms"){ signState.step = 2; renderSignStep(); }
+  else if(a === "clearSig") clearSig();
+  else if(a === "complete") completeSigning();
+});
+
+function initCprInputs(){
+  var s1 = q("sc1"), s2 = q("sc2");
+  s1.addEventListener("input", function(){ this.value = this.value.replace(/\D/g, ""); if(this.value.length >= 6) s2.focus(); checkCpr(); });
+  s2.addEventListener("input", function(){ this.value = this.value.replace(/\D/g, ""); checkCpr(); });
+  function checkCpr(){ q("sc1Btn").disabled = !(s1.value.length === 6 && s2.value.length === 4); }
+}
+
+async function goToSms(){
+  var d = allDocs.find(function(x){ return x.id === signState.docId; });
+  var s = d.signers[signState.idx];
+  signState._cpr = q("sc1").value + "-" + q("sc2").value;
+  showLoading();
+  try {
+    await cfPost("sendVerifyCode", { email:s.email, signerName:s.name, signingId:signState.docId, signerIdx:signState.idx, docTitle:d.title });
+  } catch(e){ console.error(e); }
+  hideLoading();
+  signState.step = 2;
+  renderSignStep();
+}
+
+function initSmsDigits(){
+  var digits = document.querySelectorAll(".sms-d");
+  digits.forEach(function(d){
+    d.addEventListener("input", function(){
+      this.value = this.value.replace(/\D/g, "").slice(0,1);
+      var idx = parseInt(this.dataset.i);
+      if(this.value && idx < 5) digits[idx+1].focus();
+      var code = ""; digits.forEach(function(x){ code += x.value; }); q("smsBtn").disabled = code.length < 6;
+    });
+    d.addEventListener("keydown", function(e){ if(e.key === "Backspace" && !this.value){ var idx = parseInt(this.dataset.i); if(idx > 0) digits[idx-1].focus(); } });
+    d.addEventListener("paste", function(e){ e.preventDefault(); var paste = (e.clipboardData||window.clipboardData).getData("text").replace(/\D/g,"").slice(0,6); for(var i=0;i<paste.length;i++) if(digits[i]) digits[i].value = paste[i]; var code = ""; digits.forEach(function(x){ code += x.value; }); q("smsBtn").disabled = code.length < 6; });
+  });
+  if(digits[0]) setTimeout(function(){ digits[0].focus(); }, 100);
+}
+
+async function verifySms(){
+  var code = ""; document.querySelectorAll(".sms-d").forEach(function(x){ code += x.value; });
+  showLoading();
+  try {
+    var result = await cfPost("verifyCode", { code:code, signingId:signState.docId, signerIdx:signState.idx });
+    hideLoading();
+    if(result.verified){
+      signState.step = 3; renderSignStep();
+    } else {
+      q("smsErr").style.display = "block"; q("smsErr").textContent = result.error || "Forkert kode";
+      document.querySelectorAll(".sms-d").forEach(function(x){ x.value = ""; }); document.querySelectorAll(".sms-d")[0].focus(); q("smsBtn").disabled = true;
+    }
+  } catch(e){
+    hideLoading();
+    q("smsErr").style.display = "block"; q("smsErr").textContent = "Verifikation fejlede";
+  }
+}
+
+var mCanvas, mCtx, mDraw = false, mHas = false;
+function initSigPad(){
+  mCanvas = q("mSigCanvas"); if(!mCanvas) return;
+  mCtx = mCanvas.getContext("2d"); mCanvas.width = mCanvas.offsetWidth; mCanvas.height = 180;
+  mCtx.strokeStyle = "#e4e7f0"; mCtx.lineWidth = 2.5; mCtx.lineCap = "round"; mCtx.lineJoin = "round"; mDraw = false; mHas = false;
+  function gp(e){ var r = mCanvas.getBoundingClientRect(); var t = e.touches ? e.touches[0] : e; return { x:(t.clientX-r.left)*(mCanvas.width/r.width), y:(t.clientY-r.top)*(mCanvas.height/r.height) }; }
+  function sd(e){ e.preventDefault(); mDraw = true; var p = gp(e); mCtx.beginPath(); mCtx.moveTo(p.x, p.y); }
+  function dm(e){ if(!mDraw) return; e.preventDefault(); var p = gp(e); mCtx.lineTo(p.x, p.y); mCtx.stroke(); mHas = true; }
+  function ed(){ if(!mDraw) return; mDraw = false; if(mHas) genHash(); }
+  mCanvas.onmousedown = sd; mCanvas.onmousemove = dm; mCanvas.onmouseup = ed; mCanvas.onmouseleave = ed;
+  mCanvas.ontouchstart = sd; mCanvas.ontouchmove = dm; mCanvas.ontouchend = ed;
+}
+function clearSig(){ mCtx.clearRect(0,0,mCanvas.width,mCanvas.height); mHas = false; q("sigBtn").disabled = true; q("mSigHash").textContent = "Tegn din underskrift ovenfor..."; }
+function genHash(){
+  var img = mCanvas.toDataURL("image/png");
+  var d = allDocs.find(function(x){ return x.id === signState.docId; });
+  var s = d.signers[signState.idx];
+  var hash = mkHash(img + "|" + signState._cpr + "|" + s.name + "|" + Date.now() + "|" + signState.docId);
+  q("mSigHash").innerHTML = "🔒 <strong>Hash:</strong> " + hash.slice(0,32) + "...";
+  q("sigBtn").disabled = false;
+  signState.sigImg = img; signState.sigHash = hash;
+}
+
+async function completeSigning(){
+  showLoading();
+  try {
+    var d = allDocs.find(function(x){ return x.id === signState.docId; });
+    var s = d.signers[signState.idx];
+    var encCpr = encryptCpr(signState._cpr, d.docKey || "default-key");
+
+    s.status = "signed";
+    s.signedAt = new Date().toISOString();
+    s.sigHash = signState.sigHash;
+    s.sigImg = signState.sigImg;
+    s.cprEncrypted = encCpr;
+
+    await db.collection("signings").doc(signState.docId).update({ signers: d.signers });
+    await db.collection("signings").doc(signState.docId).collection("audit").add({ time:new Date().toISOString(), type:"ok", text:s.name + ": Dokument signeret" });
+
+    var allDone = d.signers.every(function(x){ return x.status === "signed"; });
+    if(allDone){
+      await db.collection("signings").doc(signState.docId).collection("audit").add({ time:new Date().toISOString(), type:"ok", text:"Alle underskrivere har signeret" });
+      try {
+        await cfPost("sendCompletionNotice", { recipients:d.signers, docTitle:d.title, signingId:signState.docId });
+      } catch(e){ console.error(e); }
+    }
+
+    await loadSignings();
+    hideLoading();
+    q("signModal").classList.remove("on");
+    openDetail(signState.docId);
+  } catch(err){
+    hideLoading();
+    alert("Fejl: " + err.message);
+  }
+}
+
+// ══════════════════════════════════════
+// DOWNLOAD
+// ══════════════════════════════════════
+function downloadDoc(id){
+  var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
+  var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(d.title) + '</title><style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#1a1a1a}h1{font-size:22px;border-bottom:2px solid #333;padding-bottom:10px}.meta{background:#f5f5f5;padding:16px;border-radius:8px;margin:20px 0}.meta div{padding:4px 0;font-size:13px}.meta .lbl{color:#666;display:inline-block;width:120px}.sig-block{border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}.sig-block img{max-width:300px;height:auto}.sig-meta{font-size:11px;color:#666;margin-top:8px;word-break:break-all}.stamp{text-align:center;margin-top:40px;padding:20px;border:2px solid #2ed47a;border-radius:8px;background:#f0faf4}.stamp-title{font-size:16px;font-weight:bold;color:#2ed47a}</style></head><body>';
+  h += "<h1>" + esc(d.title) + "</h1>";
+  h += '<div class="meta"><div><span class="lbl">Oprettet:</span> ' + fmtDateTime(d.created) + '</div><div><span class="lbl">Fil:</span> ' + esc(d.fileName || "") + '</div><div><span class="lbl">Reference:</span> ' + d.id + '</div></div>';
+  h += "<h2>Signaturer</h2>";
+  d.signers.forEach(function(s, i){
+    h += '<div class="sig-block"><strong>' + (i+1) + ". " + esc(s.name) + '</strong><br><span style="font-size:12px;color:#666">' + esc(s.email) + '</span><br>';
+    if(s.sigImg) h += '<br><img src="' + s.sigImg + '">';
+    h += '<div class="sig-meta">Signeret: ' + fmtDateTime(s.signedAt) + '<br>Hash: ' + (s.sigHash || "") + '</div></div>';
+  });
+  h += '<div class="stamp"><div class="stamp-title">✓ DIGITALT SIGNERET</div><div style="font-size:12px;color:#666;margin-top:6px">Alle ' + d.signers.length + ' parter har signeret via SmartSign</div></div></body></html>';
+  var blob = new Blob([h], { type:"text/html" }); var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href = url; a.download = d.title.replace(/[^a-zA-Z0-9\u00e6\u00f8\u00e5\u00c6\u00d8\u00c5 _-]/g, "") + "_signeret.html";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════
+// AUDIT PAGE
+// ══════════════════════════════════════
+async function renderAuditPage(){
+  var el = q("auditLog");
+  var allAudit = [];
+  for(var i = 0; i < allDocs.length; i++){
+    var d = allDocs[i];
+    try {
+      var snap = await db.collection("signings").doc(d.id).collection("audit").orderBy("time", "desc").get();
+      snap.forEach(function(doc){ var a = doc.data(); allAudit.push({ time:a.time, type:a.type, text:a.text, doc:d.title }); });
+    } catch(e){ console.error(e); }
+  }
+  allAudit.sort(function(a,b){ return new Date(b.time) - new Date(a.time); });
+  if(!allAudit.length){ el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Ingen aktivitet endnu.</div>'; return; }
+  el.innerHTML = allAudit.map(function(a){
+    var cls = a.type === "ok" ? "a-ok" : a.type === "warn" ? "a-warn" : "a-info";
+    return '<div class="audit-item ' + cls + '"><div class="audit-time">' + fmtDateTime(a.time) + " · " + esc(a.doc) + '</div><div class="audit-text">' + a.text + '</div></div>';
+  }).join("");
+}
+
+// ══════════════════════════════════════
+// CHECK URL FOR SIGNING LINK
+// ══════════════════════════════════════
+(function checkSigningLink(){
+  var params = new URLSearchParams(window.location.search);
+  if(params.has("sign")){
+    // TODO: Load signing doc by ID and open sign flow for external signers
+    console.log("Signing link detected:", params.get("sign"), "idx:", params.get("idx"));
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
