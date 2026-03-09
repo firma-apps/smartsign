@@ -6,6 +6,16 @@
 <title>SmartSign — Digital Signeringsplatform</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#090b10">
+<!-- PWA / Apple -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SmartSign">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
 <!-- Firebase compat SDK -->
@@ -200,6 +210,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="login-err" id="loginErr"></div>
     <button class="btn btn-p" style="width:100%;margin-top:12px" id="loginBtn">Log ind</button>
     <button class="btn btn-g" style="width:100%;margin-top:8px" id="registerBtn">Opret konto</button>
+    <button class="btn" style="width:100%;margin-top:8px;background:none;color:var(--dim);font-size:12px;text-decoration:underline;border:none;cursor:pointer;" id="forgotBtn">Glemt adgangskode?</button>
+    <div id="forgotMsg" style="display:none;margin-top:10px;padding:10px 14px;background:var(--green-bg);color:var(--green);border-radius:8px;font-size:12px;text-align:center;"></div>
   </div>
 </div>
 
@@ -424,6 +436,22 @@ q("registerBtn").addEventListener("click", async function(){
 });
 
 q("logoutBtn").addEventListener("click", function(){ auth.signOut(); });
+
+q("forgotBtn").addEventListener("click", async function(){
+  var email = q("loginEmail").value.trim();
+  var msg = q("forgotMsg");
+  var err = q("loginErr");
+  err.style.display = "none";
+  if(!email){ err.textContent = "Indtast din e-mail for at nulstille adgangskode"; err.style.display = "block"; return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    msg.textContent = "✓ Nulstillingsmail sendt til " + email + " — tjek din indbakke";
+    msg.style.display = "block";
+  } catch(e){
+    err.textContent = e.code === "auth/user-not-found" ? "Ingen bruger med den e-mail" : e.message;
+    err.style.display = "block";
+  }
+});
 
 // ══════════════════════════════════════
 // NAV
@@ -1131,6 +1159,19 @@ async function renderAuditPage(){
 
 
 })();
+
+// ══════════════════════════════════════
+// SERVICE WORKER REGISTRATION
+// ══════════════════════════════════════
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").then(function(reg){
+      console.log("SW registreret:", reg.scope);
+    }).catch(function(err){
+      console.log("SW fejl:", err);
+    });
+  });
+}
 </script>
 </body>
 </html>
