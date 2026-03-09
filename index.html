@@ -387,9 +387,6 @@ async function cfPost(endpoint, data){
 // AUTH
 // ══════════════════════════════════════
 auth.onAuthStateChanged(function(user){
-  // Ikke vis login/app hvis vi er på en public signing side
-  var isSigningLink = new URLSearchParams(window.location.search).has("sign");
-  if(isSigningLink) return;
   if(user){
     q("loginScreen").classList.add("hidden");
     q("appScreen").classList.remove("hidden");
@@ -950,9 +947,37 @@ async function deleteDoc(id){
 
 function downloadDoc(id){
   var d = allDocs.find(function(x){ return x.id === id; }); if(!d) return;
-  var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(d.title) + '</title><style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#1a1a1a}h1{font-size:22px;border-bottom:2px solid #333;padding-bottom:10px}.meta{background:#f5f5f5;padding:16px;border-radius:8px;margin:20px 0}.meta div{padding:4px 0;font-size:13px}.meta .lbl{color:#666;display:inline-block;width:120px}.sig-block{border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}.sig-block img{max-width:300px;height:auto}.sig-meta{font-size:11px;color:#666;margin-top:8px;word-break:break-all}.stamp{text-align:center;margin-top:40px;padding:20px;border:2px solid #2ed47a;border-radius:8px;background:#f0faf4}.stamp-title{font-size:16px;font-weight:bold;color:#2ed47a}</style></head><body>';
+
+  // Byg original-dokument sektion
+  var origSection = "";
+  if(d.fileData){
+    var isPdf = /\.pdf$/i.test(d.fileName || "");
+    var isImg = /\.(png|jpe?g|gif|webp)$/i.test(d.fileName || "");
+    if(isPdf){
+      origSection = '<h2>Originalt dokument</h2>'
+        + '<div style="margin:12px 0;border:1px solid #ddd;border-radius:8px;overflow:hidden;">'
+        + '<embed src="' + d.fileData + '" type="application/pdf" width="100%" height="800px" style="display:block;">'
+        + '</div>'
+        + '<p style="font-size:11px;color:#888;margin-bottom:20px;">Kan ikke se PDF? <a href="' + d.fileData + '" download="' + esc(d.fileName) + '">Klik her for at downloade</a></p>';
+    } else if(isImg){
+      origSection = '<h2>Originalt dokument</h2>'
+        + '<div style="margin:12px 0;border:1px solid #ddd;border-radius:8px;overflow:hidden;text-align:center;padding:12px;">'
+        + '<img src="' + d.fileData + '" style="max-width:100%;height:auto;">'
+        + '</div>';
+    } else {
+      // DOCX eller anden fil — tilbyd download
+      origSection = '<h2>Originalt dokument</h2>'
+        + '<div style="margin:12px 0;padding:16px;background:#f5f5f5;border-radius:8px;">'
+        + '📎 <a href="' + d.fileData + '" download="' + esc(d.fileName || "dokument") + '" style="font-weight:600;color:#2563EB;">'
+        + esc(d.fileName || "Download dokument") + '</a>'
+        + '</div>';
+    }
+  }
+
+  var h = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(d.title) + '</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#1a1a1a}h1{font-size:22px;border-bottom:2px solid #333;padding-bottom:10px}h2{font-size:16px;margin:24px 0 10px;color:#333}.meta{background:#f5f5f5;padding:16px;border-radius:8px;margin:20px 0}.meta div{padding:4px 0;font-size:13px}.meta .lbl{color:#666;display:inline-block;width:120px}.sig-block{border:1px solid #ddd;border-radius:8px;padding:16px;margin:12px 0}.sig-block img{max-width:300px;height:auto}.sig-meta{font-size:11px;color:#666;margin-top:8px;word-break:break-all}.stamp{text-align:center;margin-top:40px;padding:20px;border:2px solid #2ed47a;border-radius:8px;background:#f0faf4}.stamp-title{font-size:16px;font-weight:bold;color:#2ed47a}</style></head><body>';
   h += "<h1>" + esc(d.title) + "</h1>";
   h += '<div class="meta"><div><span class="lbl">Oprettet:</span> ' + fmtDateTime(d.created) + '</div><div><span class="lbl">Fil:</span> ' + esc(d.fileName || "") + '</div><div><span class="lbl">Reference:</span> ' + d.id + '</div></div>';
+  h += origSection;
   h += "<h2>Signaturer</h2>";
   d.signers.forEach(function(s, i){
     h += '<div class="sig-block"><strong>' + (i+1) + ". " + esc(s.name) + '</strong><br><span style="font-size:12px;color:#666">' + esc(s.email) + '</span><br>';
@@ -998,18 +1023,8 @@ async function renderAuditPage(){
   var pubDoc = null;
   var pubState = { _cpr:"", sigImg:"", sigHash:"" };
 
-  // Skjul login når DOM er klar
-  function hideAndShow(){
-    var ls = document.getElementById("loginScreen");
-    var as = document.getElementById("appScreen");
-    if(ls) ls.classList.add("hidden");
-    if(as) as.classList.add("hidden");
-  }
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", hideAndShow);
-  } else {
-    hideAndShow();
-  }
+  q("loginScreen").classList.add("hidden");
+  q("appScreen").classList.add("hidden");
 
   var wrap = document.createElement("div");
   wrap.style.cssText = "min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;";
