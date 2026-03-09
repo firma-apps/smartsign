@@ -8,8 +8,8 @@ const db = admin.firestore();
 
 // Resend helper
 async function sendEmail(to, subject, html) {
-  const resendKey = functions.config().resend.key;
-  const fromAddr = functions.config().resend.from;
+  const resendKey = process.env.RESEND_KEY;
+  const fromAddr = process.env.RESEND_FROM;
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + resendKey },
@@ -48,7 +48,7 @@ exports.sendVerifyCode = functions.https.onRequest((req, res) => {
             <div style="display:inline-block;background:#f5f5f5;padding:16px 32px;border-radius:12px;font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:8px;color:#1a1a1a;">${code}</div>
           </div>
           <p style="color:#999;font-size:12px;text-align:center;">Koden udloeber om 5 minutter.</p>
-          <p style="color:#bbb;font-size:11px;text-align:center;margin-top:24px;">SmartSign — SmartSign</p>
+          <p style="color:#bbb;font-size:11px;text-align:center;margin-top:24px;">SmartSign</p>
         </div>
       `);
 
@@ -125,7 +125,7 @@ exports.sendSigningEmail = functions.https.onRequest((req, res) => {
           <div style="text-align:center;margin:24px 0;">
             <a href="${signingUrl}" style="display:inline-block;background:#3b7dff;color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:bold;font-size:15px;">Underskriv dokument</a>
           </div>
-          <p style="color:#999;font-size:11px;text-align:center;margin-top:24px;">SmartSign — SmartSign</p>
+          <p style="color:#999;font-size:11px;text-align:center;margin-top:24px;">SmartSign</p>
         </div>
       `);
 
@@ -161,7 +161,7 @@ exports.sendReminder = functions.https.onRequest((req, res) => {
           <div style="text-align:center;margin:24px 0;">
             <a href="${signingUrl}" style="display:inline-block;background:#ff9800;color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:bold;">Underskriv nu</a>
           </div>
-          <p style="color:#999;font-size:11px;text-align:center;">SmartSign — SmartSign</p>
+          <p style="color:#999;font-size:11px;text-align:center;">SmartSign</p>
         </div>
       `);
 
@@ -198,7 +198,7 @@ exports.sendCompletionNotice = functions.https.onRequest((req, res) => {
               <div style="font-size:16px;font-weight:bold;">${docTitle}</div>
               <div style="font-size:13px;color:#666;margin-top:4px;">Alle ${recipients.length} underskrivere har signeret</div>
             </div>
-            <p style="color:#999;font-size:11px;text-align:center;">SmartSign — SmartSign</p>
+            <p style="color:#999;font-size:11px;text-align:center;">SmartSign</p>
           </div>
         `);
       }
