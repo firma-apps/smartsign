@@ -335,16 +335,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 // FIREBASE CONFIG
 // ══════════════════════════════════════
 var firebaseConfig = {
-  apiKey: "AIzaSyBYPLDfEok3Zs8mjefhAqM-tEWzzkZWJak",
-  authDomain: "smartsign-7884b.firebaseapp.com",
-  projectId: "smartsign-7884b",
-  storageBucket: "smartsign-7884b.firebasestorage.app",
-  messagingSenderId: "432073010744",
-  appId: "1:432073010744:web:e1e5b41d5f5238ccbd00cd"
+  apiKey: "AIzaSyDuMRrES-cI_SuLWUB9F53ORtuROO9sWiQ",
+  authDomain: "smartsign-324a7.firebaseapp.com",
+  projectId: "smartsign-324a7",
+  storageBucket: "smartsign-324a7.firebasestorage.app",
+  messagingSenderId: "404052296843",
+  appId: "1:404052296843:web:ae2ecb39953dcc096ec08e"
 };
 
 // Cloud Functions base URL — opdater efter deploy
-var CF_BASE = "https://us-central1-smartsign-7884b.cloudfunctions.net";
+var CF_BASE = "https://us-central1-smartsign-324a7.cloudfunctions.net";
 
 // ══════════════════════════════════════
 // INIT FIREBASE
@@ -399,6 +399,8 @@ async function cfPost(endpoint, data){
 // AUTH
 // ══════════════════════════════════════
 auth.onAuthStateChanged(function(user){
+  // Ikke vis login/app hvis vi er på en public signing side
+  if(new URLSearchParams(window.location.search).has("sign")) return;
   if(user){
     q("loginScreen").classList.add("hidden");
     q("appScreen").classList.remove("hidden");
